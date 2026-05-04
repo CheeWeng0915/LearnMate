@@ -1,7 +1,8 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 google-genai
 google-api-python-client
-pymongo
+pymongo[srv]
 pydantic
+certifi

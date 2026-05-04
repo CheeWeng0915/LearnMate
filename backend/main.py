@@ -5,7 +5,6 @@ from route.health import router as health_router
 from route.learning_plan import router as learning_plan_router
 from route.youtube import router as youtube_router
 from route.task import router as task_router
-from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(
@@ -17,18 +16,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://你的-frontend-url.run.app"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # 先让 Cloud Run deploy 成功，之后再换成 frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
