@@ -16,7 +16,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 先让 Cloud Run deploy 成功，之后再换成 frontend URL
+    allow_origins=[
+        "http://localhost:3000",
+        "https://learnmate-frontend-3eapvby57a-as.a.run.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
