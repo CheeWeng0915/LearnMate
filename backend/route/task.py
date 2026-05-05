@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
+from service.auth_service import get_current_user
 from service.mongodb_service import complete_learning_task
 
 
@@ -12,12 +13,12 @@ router = APIRouter(
 @router.patch("/{task_id}/complete")
 def complete_task(
     task_id: str,
-    user_id: str = Query(default="demo_user")
+    current_user=Depends(get_current_user)
 ):
     try:
         result = complete_learning_task(
             task_id=task_id,
-            user_id=user_id
+            user_id=current_user["id"]
         )
 
         return {
@@ -31,6 +32,9 @@ def complete_task(
             status_code=404,
             detail=str(e)
         )
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         raise HTTPException(

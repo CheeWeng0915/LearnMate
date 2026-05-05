@@ -14,6 +14,7 @@ env:
   SERVICE_NAME: learnmate-backend
   REPOSITORY: learnmate-repo
   IMAGE_NAME: learnmate-backend
+  FRONTEND_RUNTIME_SERVICE_ACCOUNT: learnmate-frontend-runtime@learnmate-494807.iam.gserviceaccount.com
   WORKLOAD_IDENTITY_PROVIDER: projects/855397868650/locations/global/workloadIdentityPools/github/providers/github-provider
   SERVICE_ACCOUNT: github-actions-deployer@learnmate-494807.iam.gserviceaccount.com
 
@@ -60,8 +61,16 @@ jobs:
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --platform managed \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
             --memory 512Mi \
             --cpu 1 \
             --min-instances 0 \
             --max-instances 1
+
+      - name: Allow frontend to invoke backend
+        run: |
+          gcloud run services add-iam-policy-binding ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --member serviceAccount:${{ env.FRONTEND_RUNTIME_SERVICE_ACCOUNT }} \
+            --role roles/run.invoker

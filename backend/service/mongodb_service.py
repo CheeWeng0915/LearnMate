@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -8,28 +9,97 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE_DIR / ".env"
+logger = logging.getLogger(__name__)
 
 load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 MONGODB_URI = os.getenv("MONGODB_URI")
-MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "learnmate")
+MONGODB_DB_NAME = (
+    os.getenv("MONGODB_DB_NAME") or
+    os.getenv("DATABASE_NAME") or
+    "learnmate"
+)
+MONGODB_SERVER_SELECTION_TIMEOUT_MS = int(
+    os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000")
+)
 
 if not MONGODB_URI:
     raise RuntimeError(f"MONGODB_URI is missing. Please check {ENV_PATH}")
 
 
-client = MongoClient(
-    MONGODB_URI,
-    tls=True,
-    tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=30000
-)
+_client = None
+_database = None
 
-db = client[MONGODB_DB_NAME]
+
+def get_client():
+    global _client
+
+    if _client is None:
+        mongo_client = MongoClient(
+            MONGODB_URI,
+            tls=True,
+            tlsCAFile=certifi.where(),
+            serverSelectionTimeoutMS=MONGODB_SERVER_SELECTION_TIMEOUT_MS
+        )
+        _client = mongo_client
+
+    return _client
+
+
+def get_database():
+    global _database
+
+    if _database is None:
+        _database = get_client()[MONGODB_DB_NAME]
+
+    return _database
+
+
+class LazyMongoClient:
+    def __getattr__(self, name):
+        return getattr(get_client(), name)
+
+    def __getitem__(self, name):
+        return get_client()[name]
+
+
+class LazyDatabase:
+    def __getattr__(self, name):
+        return getattr(get_database(), name)
+
+    def __getitem__(self, name):
+        return get_database()[name]
+
+
+client = LazyMongoClient()
+db = LazyDatabase()
+
+
+def ensure_database_indexes():
+    try:
+        db.users.create_index("email", unique=True)
+        db.refresh_sessions.create_index("token_hash", unique=True)
+        db.refresh_sessions.create_index([("user_id", 1), ("expires_at", 1)])
+        db.api_usage.create_index(
+            [
+                ("scope", 1),
+                ("key", 1),
+                ("action", 1),
+                ("window_start", 1)
+            ],
+            unique=True
+        )
+        db.api_usage.create_index("expires_at", expireAfterSeconds=0)
+        db.learning_plans.create_index([("user_id", 1), ("status", 1), ("created_at", -1)])
+        db.learning_tasks.create_index([("user_id", 1), ("plan_id", 1), ("day", 1)])
+        db.learning_resources.create_index([("user_id", 1), ("plan_id", 1), ("day", 1)])
+    except PyMongoError as exc:
+        logger.warning("MongoDB index setup skipped: %s", exc)
 
 
 def test_mongodb_connection():
@@ -166,7 +236,7 @@ def save_learning_plan(
     }
 
 
-def get_active_learning_plan(user_id: str = "demo_user"):
+def get_active_learning_plan(user_id: str):
     """
     Step 5:
     Get user's latest active learning plan with tasks and resources.
@@ -211,7 +281,7 @@ def get_active_learning_plan(user_id: str = "demo_user"):
     }
 
 
-def complete_learning_task(task_id: str, user_id: str = "demo_user"):
+def complete_learning_task(task_id: str, user_id: str):
     """
     Step 6:
     Mark task as completed and update learning progress.
@@ -304,7 +374,7 @@ def complete_learning_task(task_id: str, user_id: str = "demo_user"):
     }
 
 
-def get_next_learning_task(plan_id: str, user_id: str = "demo_user"):
+def get_next_learning_task(plan_id: str, user_id: str):
     """
     Step 7:
     Get next pending task in the learning plan.
