@@ -1,16 +1,18 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
 from schema.learning_plan_schema import (
     LearningPlanGenerateRequest,
     SaveLearningPlanRequest
 )
 
+from service.auth_service import get_current_user
 from service.gemini_service import generate_learning_plan
 from service.mongodb_service import (
     save_learning_plan,
     get_active_learning_plan,
     get_next_learning_task
 )
+from service.quota_service import DAILY_LEARNING_PLAN_LIMIT, enforce_user_quota
 
 
 router = APIRouter(
@@ -20,8 +22,16 @@ router = APIRouter(
 
 
 @router.post("/generate")
-def generate_plan(request: LearningPlanGenerateRequest):
+def generate_plan(
+    request: LearningPlanGenerateRequest,
+    current_user=Depends(get_current_user)
+):
     try:
+        enforce_user_quota(
+            user_id=current_user["id"],
+            action="learning_plan_generate",
+            limit=DAILY_LEARNING_PLAN_LIMIT
+        )
         plan = generate_learning_plan(
             goal=request.goal,
             level=request.level,
@@ -35,6 +45,9 @@ def generate_plan(request: LearningPlanGenerateRequest):
             "data": plan
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -43,10 +56,13 @@ def generate_plan(request: LearningPlanGenerateRequest):
 
 
 @router.post("/save")
-def save_plan(request: SaveLearningPlanRequest):
+def save_plan(
+    request: SaveLearningPlanRequest,
+    current_user=Depends(get_current_user)
+):
     try:
         result = save_learning_plan(
-            user_id=request.user_id,
+            user_id=current_user["id"],
             plan=request.plan,
             resources_by_day=request.resources_by_day
         )
@@ -57,6 +73,9 @@ def save_plan(request: SaveLearningPlanRequest):
             "data": result
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -65,11 +84,9 @@ def save_plan(request: SaveLearningPlanRequest):
 
 
 @router.get("/active")
-def get_active_plan(
-    user_id: str = Query(default="demo_user")
-):
+def get_active_plan(current_user=Depends(get_current_user)):
     try:
-        result = get_active_learning_plan(user_id=user_id)
+        result = get_active_learning_plan(user_id=current_user["id"])
 
         if not result:
             return {
@@ -84,6 +101,9 @@ def get_active_plan(
             "data": result
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -94,12 +114,12 @@ def get_active_plan(
 @router.get("/{plan_id}/next")
 def get_next_task(
     plan_id: str,
-    user_id: str = Query(default="demo_user")
+    current_user=Depends(get_current_user)
 ):
     try:
         result = get_next_learning_task(
             plan_id=plan_id,
-            user_id=user_id
+            user_id=current_user["id"]
         )
 
         return {
@@ -113,6 +133,9 @@ def get_next_task(
             status_code=404,
             detail=str(e)
         )
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         raise HTTPException(

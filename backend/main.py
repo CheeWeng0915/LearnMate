@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from route.health import router as health_router
+from route.auth import router as auth_router
 from route.learning_plan import router as learning_plan_router
 from route.youtube import router as youtube_router
 from route.task import router as task_router
+from service.mongodb_service import ensure_database_indexes
 
 
 app = FastAPI(
@@ -27,9 +29,15 @@ app.add_middleware(
 
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(learning_plan_router)
 app.include_router(youtube_router)
 app.include_router(task_router)
+
+
+@app.on_event("startup")
+def startup():
+    ensure_database_indexes()
 
 
 @app.get("/")
