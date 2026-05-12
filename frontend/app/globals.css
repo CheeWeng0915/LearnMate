@@ -1,26 +1,144 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Notion palette — sourced from DESIGN.md */
+  --primary:           #5645d4;
+  --primary-pressed:   #4534b3;
+  --primary-deep:      #3a2a99;
+  --on-primary:        #ffffff;
+
+  --brand-navy:        #0a1530;
+  --brand-navy-deep:   #070f24;
+  --brand-navy-mid:    #1a2a52;
+
+  --link-blue:         #0075de;
+  --link-blue-pressed: #005bab;
+
+  --brand-orange:      #dd5b00;
+  --brand-orange-deep: #793400;
+  --brand-pink:        #ff64c8;
+  --brand-purple:      #7b3ff2;
+  --brand-purple-800:  #391c57;
+  --brand-teal:        #2a9d99;
+  --brand-green:       #1aae39;
+  --brand-yellow:      #f5d75e;
+
+  --tint-peach:        #ffe8d4;
+  --tint-rose:         #fde0ec;
+  --tint-mint:         #d9f3e1;
+  --tint-lavender:     #e6e0f5;
+  --tint-sky:          #dcecfa;
+  --tint-yellow:       #fef7d6;
+  --tint-yellow-bold:  #f9e79f;
+  --tint-cream:        #f8f5e8;
+  --tint-gray:         #f0eeec;
+
+  --canvas:            #ffffff;
+  --surface:           #f6f5f4;
+  --surface-soft:      #fafaf9;
+  --hairline:          #e5e3df;
+  --hairline-soft:     #ede9e4;
+  --hairline-strong:   #c8c4be;
+
+  --ink-deep:          #000000;
+  --ink:               #1a1a1a;
+  --charcoal:          #37352f;
+  --slate:             #5d5b54;
+  --steel:             #787671;
+  --stone:             #a4a097;
+  --muted:             #bbb8b1;
+  --on-dark:           #ffffff;
+  --on-dark-muted:     #a4a097;
+
+  --semantic-success:  #1aae39;
+  --semantic-warning:  #dd5b00;
+  --semantic-error:    #e03131;
+
+  --background: var(--canvas);
+  --foreground: var(--charcoal);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: var(--primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-primary-deep: var(--primary-deep);
+  --color-on-primary: var(--on-primary);
+
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-deep: var(--brand-navy-deep);
+  --color-brand-navy-mid: var(--brand-navy-mid);
+
+  --color-link: var(--link-blue);
+  --color-link-pressed: var(--link-blue-pressed);
+
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-deep: var(--brand-orange-deep);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-green: var(--brand-green);
+  --color-brand-yellow: var(--brand-yellow);
+
+  --color-tint-peach: var(--tint-peach);
+  --color-tint-rose: var(--tint-rose);
+  --color-tint-mint: var(--tint-mint);
+  --color-tint-lavender: var(--tint-lavender);
+  --color-tint-sky: var(--tint-sky);
+  --color-tint-yellow: var(--tint-yellow);
+  --color-tint-yellow-bold: var(--tint-yellow-bold);
+  --color-tint-cream: var(--tint-cream);
+  --color-tint-gray: var(--tint-gray);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-hairline-strong: var(--hairline-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-deep: var(--ink-deep);
+  --color-charcoal: var(--charcoal);
+  --color-slate: var(--slate);
+  --color-steel: var(--steel);
+  --color-stone: var(--stone);
+  --color-muted: var(--muted);
+  --color-on-dark: var(--on-dark);
+  --color-on-dark-muted: var(--on-dark-muted);
+
+  --color-success: var(--semantic-success);
+  --color-warning: var(--semantic-warning);
+  --color-error:   var(--semantic-error);
+
+  --font-sans: var(--font-inter);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Notion-style decorative dots for hero */
+.notion-dots {
+  background-image:
+    radial-gradient(circle, var(--brand-pink) 8px, transparent 9px),
+    radial-gradient(circle, var(--brand-yellow) 6px, transparent 7px),
+    radial-gradient(circle, var(--brand-teal) 5px, transparent 6px),
+    radial-gradient(circle, var(--brand-orange) 7px, transparent 8px);
+  background-position: 8% 20%, 90% 30%, 15% 80%, 80% 78%;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
