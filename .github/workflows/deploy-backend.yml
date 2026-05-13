@@ -8,12 +8,20 @@ on:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"
 
+  workflow_dispatch:
+
 env:
   PROJECT_ID: learnmate-494807
   REGION: asia-southeast1
   SERVICE_NAME: learnmate-backend
   REPOSITORY: learnmate-repo
   IMAGE_NAME: learnmate-backend
+  MONGODB_DB_NAME: LearnMateDatabase
+  MONGODB_SERVER_SELECTION_TIMEOUT_MS: "5000"
+  JWT_ALGORITHM: HS256
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  GEMINI_MODEL: gemini-2.0-flash
   FRONTEND_RUNTIME_SERVICE_ACCOUNT: learnmate-frontend-runtime@learnmate-494807.iam.gserviceaccount.com
   WORKLOAD_IDENTITY_PROVIDER: projects/855397868650/locations/global/workloadIdentityPools/github/providers/github-provider
   SERVICE_ACCOUNT: github-actions-deployer@learnmate-494807.iam.gserviceaccount.com
@@ -44,6 +52,26 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - name: Validate required backend secrets
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: |
+          missing=0
+          for key in MONGODB_URI JWT_SECRET_KEY GEMINI_API_KEY YOUTUBE_API_KEY TURNSTILE_SECRET_KEY; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing GitHub secret: ${key}"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Build Docker image
         run: |
           docker build \
@@ -62,6 +90,8 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --platform managed \
             --no-allow-unauthenticated \
+            --set-env-vars MONGODB_DB_NAME=${{ env.MONGODB_DB_NAME }},MONGODB_SERVER_SELECTION_TIMEOUT_MS=${{ env.MONGODB_SERVER_SELECTION_TIMEOUT_MS }},JWT_ALGORITHM=${{ env.JWT_ALGORITHM }},ACCESS_TOKEN_EXPIRE_MINUTES=${{ env.ACCESS_TOKEN_EXPIRE_MINUTES }},REFRESH_TOKEN_EXPIRE_DAYS=${{ env.REFRESH_TOKEN_EXPIRE_DAYS }},GEMINI_MODEL=${{ env.GEMINI_MODEL }} \
+            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }},TURNSTILE_SECRET_KEY=${{ secrets.TURNSTILE_SECRET_KEY }} \
             --memory 512Mi \
             --cpu 1 \
             --min-instances 0 \
