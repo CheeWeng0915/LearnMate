@@ -82,6 +82,33 @@ jobs:
         run: |
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Normalize Cloud Run env types
+        run: |
+          if ! gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} >/dev/null 2>&1; then
+            echo "Service does not exist yet; skipping env type normalization."
+            exit 0
+          fi
+
+          secret_backed_keys="$(
+            gcloud run services describe ${{ env.SERVICE_NAME }} \
+              --region ${{ env.REGION }} \
+              --project ${{ env.PROJECT_ID }} \
+              --format=json | jq -r '
+                .spec.template.spec.containers[0].env[]?
+                | select(.valueSource.secretKeyRef.secret != null)
+                | .name
+              ' | grep -E '^(MONGODB_URI|JWT_SECRET_KEY|GEMINI_API_KEY|YOUTUBE_API_KEY|TURNSTILE_SECRET_KEY)$' | paste -sd, -
+          )"
+
+          if [ -n "$secret_backed_keys" ]; then
+            gcloud run services update ${{ env.SERVICE_NAME }} \
+              --region ${{ env.REGION }} \
+              --project ${{ env.PROJECT_ID }} \
+              --remove-secrets "$secret_backed_keys"
+          fi
+
       - name: Deploy to Cloud Run
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
