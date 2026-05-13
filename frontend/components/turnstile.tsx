@@ -22,10 +22,6 @@ declare global {
   }
 }
 
-// Cloudflare Turnstile test sitekey — always passes, only works on localhost.
-// Production should set NEXT_PUBLIC_TURNSTILE_SITE_KEY.
-const TEST_SITE_KEY = "1x00000000000000000000AA";
-
 export function Turnstile({
   onToken,
 }: {
@@ -35,10 +31,14 @@ export function Turnstile({
   const widgetIdRef = useRef<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
 
-  const siteKey =
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || TEST_SITE_KEY;
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
+    if (!siteKey) {
+      onToken("");
+      return;
+    }
+
     if (!scriptReady || !ref.current || !window.turnstile) return;
 
     widgetIdRef.current = window.turnstile.render(ref.current, {
@@ -50,23 +50,27 @@ export function Turnstile({
 
     return () => {
       if (widgetIdRef.current && window.turnstile) {
-        try {
-          window.turnstile.remove(widgetIdRef.current);
-        } catch {
-          /* ignore */
-        }
+        window.turnstile.remove(widgetIdRef.current);
       }
     };
   }, [scriptReady, siteKey, onToken]);
 
   return (
     <>
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="afterInteractive"
-        onLoad={() => setScriptReady(true)}
-      />
-      <div ref={ref} className="flex justify-center" />
+      {siteKey ? (
+        <>
+          <Script
+            src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+            strategy="afterInteractive"
+            onLoad={() => setScriptReady(true)}
+          />
+          <div ref={ref} className="flex justify-center" />
+        </>
+      ) : (
+        <p className="text-center text-[13px] text-error">
+          Verification is unavailable right now.
+        </p>
+      )}
     </>
   );
 }
