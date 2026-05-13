@@ -83,15 +83,36 @@ jobs:
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
         run: |
+          trap 'rm -f backend-env.yaml' EXIT
+
+          cat > backend-env.yaml <<EOF
+          MONGODB_DB_NAME: "${{ env.MONGODB_DB_NAME }}"
+          MONGODB_SERVER_SELECTION_TIMEOUT_MS: "${{ env.MONGODB_SERVER_SELECTION_TIMEOUT_MS }}"
+          JWT_ALGORITHM: "${{ env.JWT_ALGORITHM }}"
+          ACCESS_TOKEN_EXPIRE_MINUTES: "${{ env.ACCESS_TOKEN_EXPIRE_MINUTES }}"
+          REFRESH_TOKEN_EXPIRE_DAYS: "${{ env.REFRESH_TOKEN_EXPIRE_DAYS }}"
+          GEMINI_MODEL: "${{ env.GEMINI_MODEL }}"
+          MONGODB_URI: "${MONGODB_URI}"
+          JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+          GEMINI_API_KEY: "${GEMINI_API_KEY}"
+          YOUTUBE_API_KEY: "${YOUTUBE_API_KEY}"
+          TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY}"
+          EOF
+
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --platform managed \
             --no-allow-unauthenticated \
-            --set-env-vars MONGODB_DB_NAME=${{ env.MONGODB_DB_NAME }},MONGODB_SERVER_SELECTION_TIMEOUT_MS=${{ env.MONGODB_SERVER_SELECTION_TIMEOUT_MS }},JWT_ALGORITHM=${{ env.JWT_ALGORITHM }},ACCESS_TOKEN_EXPIRE_MINUTES=${{ env.ACCESS_TOKEN_EXPIRE_MINUTES }},REFRESH_TOKEN_EXPIRE_DAYS=${{ env.REFRESH_TOKEN_EXPIRE_DAYS }},GEMINI_MODEL=${{ env.GEMINI_MODEL }} \
-            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }},TURNSTILE_SECRET_KEY=${{ secrets.TURNSTILE_SECRET_KEY }} \
+            --env-vars-file backend-env.yaml \
             --memory 512Mi \
             --cpu 1 \
             --min-instances 0 \
