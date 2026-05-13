@@ -35,6 +35,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY")
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+TURNSTILE_SECRET_ERROR_CODES = {"invalid-input-secret", "missing-input-secret"}
 
 if not JWT_SECRET_KEY:
     raise RuntimeError(f"JWT_SECRET_KEY is missing. Please check {ENV_PATH}")
@@ -147,12 +148,26 @@ def verify_turnstile_token(token: str, remote_ip: Optional[str]):
             data=payload,
             timeout=10
         )
-        response.raise_for_status()
-        result = response.json()
     except requests.RequestException:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Unable to verify registration challenge."
+        )
+
+    try:
+        result = response.json()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to verify registration challenge."
+        )
+
+    error_codes = set(result.get("error-codes") or [])
+
+    if error_codes & TURNSTILE_SECRET_ERROR_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TURNSTILE_SECRET_KEY is invalid."
         )
 
     if not result.get("success"):
