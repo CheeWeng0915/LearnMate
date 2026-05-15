@@ -34,3 +34,7 @@ class LearningPlanData(BaseModel):
 class SaveLearningPlanRequest(BaseModel):
     plan: Dict[str, Any]
     resources_by_day: Optional[Dict[str, Any]] = None
+
+
+class LearningDayNoteRequest(BaseModel):
+    note: str = Field(default="", max_length=5000)

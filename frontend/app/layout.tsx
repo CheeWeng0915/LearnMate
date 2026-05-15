@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   title: "LearnMate — your goal, your pace, real progress",
   description:
     "Tell us what you want to learn. We'll build a day-by-day plan with hand-picked videos so you actually finish.",
+  icons: {
+    icon: [{ url: "/robot-icon.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/robot-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/robot-icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

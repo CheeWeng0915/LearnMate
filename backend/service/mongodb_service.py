@@ -8,7 +8,7 @@ import certifi
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from pymongo.errors import PyMongoError
 
 
@@ -98,6 +98,10 @@ def ensure_database_indexes():
         db.learning_plans.create_index([("user_id", 1), ("status", 1), ("created_at", -1)])
         db.learning_tasks.create_index([("user_id", 1), ("plan_id", 1), ("day", 1)])
         db.learning_resources.create_index([("user_id", 1), ("plan_id", 1), ("day", 1)])
+        db.learning_day_notes.create_index(
+            [("user_id", 1), ("plan_id", 1), ("day", 1)],
+            unique=True
+        )
     except PyMongoError as exc:
         logger.warning("MongoDB index setup skipped: %s", exc)
 
@@ -166,13 +170,20 @@ def _resources_by_day(resources: List[Dict[str, Any]]):
     for resource in resources:
         day = str(resource.get("day"))
         grouped.setdefault(day, []).append({
+            "id": str(resource.get("_id")),
             "video_id": resource.get("video_id"),
             "title": resource.get("title"),
             "description": resource.get("description"),
             "channel_title": resource.get("channel_title"),
             "published_at": resource.get("published_at"),
             "thumbnail_url": resource.get("thumbnail_url"),
-            "url": resource.get("url")
+            "url": resource.get("url"),
+            "completed": _is_completed(resource),
+            "completed_at": (
+                resource.get("completed_at").isoformat()
+                if isinstance(resource.get("completed_at"), datetime)
+                else resource.get("completed_at")
+            )
         })
 
     return grouped
@@ -396,8 +407,9 @@ def save_learning_plan(
         "id": str(plan_id),
         "user_id": user_id,
         "plan": _plan_payload(plan_doc, plan.get("days", [])),
-        "resources_by_day": resources_by_day or {},
+        "resources_by_day": _resources_by_day(resource_docs) if resource_docs else {},
         "created_at": now.isoformat(),
+        "last_studied_at": None,
         "is_active": True,
         "tasks": _shape_saved_tasks(saved_task_docs),
         "resource_ids": [str(resource_id) for resource_id in resource_ids]
@@ -453,6 +465,11 @@ def get_active_learning_plan(user_id: str):
             plan.get("created_at").isoformat()
             if isinstance(plan.get("created_at"), datetime)
             else plan.get("created_at")
+        ),
+        "last_studied_at": (
+            plan.get("last_studied_at").isoformat()
+            if isinstance(plan.get("last_studied_at"), datetime)
+            else plan.get("last_studied_at")
         ),
         "is_active": plan.get("status") == "active",
         "tasks": _shape_saved_tasks(tasks)
@@ -549,6 +566,7 @@ def complete_learning_task(task_id: str, user_id: str):
         {
             "$set": {
                 "progress_percent": progress_percent,
+                "last_studied_at": now,
                 "updated_at": now
             }
         }
@@ -664,4 +682,229 @@ def get_next_learning_task(plan_id: str, user_id: str):
         "message": f"Continue with Day {day}: {next_task.get('description')}",
         "task": next_task,
         "resources": serialize_mongo_doc(resources)
+    }
+
+
+def complete_learning_resource(resource_id: str, user_id: str):
+    client.admin.command("ping")
+
+    resource_object_id = to_object_id(resource_id)
+    now = datetime.now(timezone.utc)
+
+    resource = db.learning_resources.find_one_and_update(
+        {
+            "_id": resource_object_id,
+            "user_id": user_id
+        },
+        {
+            "$set": {
+                "status": "completed",
+                "completed": True,
+                "completed_at": now,
+                "updated_at": now
+            }
+        },
+        return_document=ReturnDocument.AFTER
+    )
+
+    if not resource:
+        raise ValueError("Resource not found")
+
+    db.learning_plans.update_one(
+        {
+            "_id": resource["plan_id"],
+            "user_id": user_id
+        },
+        {
+            "$set": {
+                "last_studied_at": now,
+                "updated_at": now
+            }
+        }
+    )
+
+    return {
+        "id": str(resource["_id"]),
+        "plan_id": str(resource["plan_id"]),
+        "day": resource.get("day"),
+        "completed": True,
+        "completed_at": now.isoformat()
+    }
+
+
+def get_learning_day_note(plan_id: str, day: int, user_id: str):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    plan = db.learning_plans.find_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        }
+    )
+
+    if not plan:
+        raise ValueError("Learning plan not found")
+
+    note = db.learning_day_notes.find_one(
+        {
+            "plan_id": plan_object_id,
+            "user_id": user_id,
+            "day": day
+        }
+    )
+
+    if not note:
+        return {
+            "plan_id": plan_id,
+            "day": day,
+            "note": "",
+            "updated_at": None
+        }
+
+    return {
+        "id": str(note["_id"]),
+        "plan_id": str(note["plan_id"]),
+        "day": note.get("day"),
+        "note": note.get("note", ""),
+        "updated_at": (
+            note.get("updated_at").isoformat()
+            if isinstance(note.get("updated_at"), datetime)
+            else note.get("updated_at")
+        )
+    }
+
+
+def save_learning_day_note(plan_id: str, day: int, note: str, user_id: str):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    plan = db.learning_plans.find_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        }
+    )
+
+    if not plan:
+        raise ValueError("Learning plan not found")
+
+    now = datetime.now(timezone.utc)
+    saved_note = db.learning_day_notes.find_one_and_update(
+        {
+            "plan_id": plan_object_id,
+            "user_id": user_id,
+            "day": day
+        },
+        {
+            "$set": {
+                "note": note,
+                "updated_at": now
+            },
+            "$setOnInsert": {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "day": day,
+                "created_at": now
+            }
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+
+    db.learning_plans.update_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        },
+        {
+            "$set": {
+                "last_studied_at": now,
+                "updated_at": now
+            }
+        }
+    )
+
+    return {
+        "id": str(saved_note["_id"]),
+        "plan_id": str(saved_note["plan_id"]),
+        "day": saved_note.get("day"),
+        "note": saved_note.get("note", ""),
+        "updated_at": now.isoformat()
+    }
+
+
+def complete_learning_day(plan_id: str, day: int, user_id: str):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    plan = db.learning_plans.find_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        }
+    )
+
+    if not plan:
+        raise ValueError("Learning plan not found")
+
+    tasks = list(
+        db.learning_tasks.find(
+            {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "day": day
+            }
+        )
+    )
+
+    total_tasks = len(tasks)
+    completed_tasks = len([task for task in tasks if _is_completed(task)])
+
+    if total_tasks == 0:
+        raise ValueError("Learning day not found")
+
+    if completed_tasks < total_tasks:
+        raise ValueError("Complete all tasks before finishing the day")
+
+    now = datetime.now(timezone.utc)
+    total_plan_tasks, completed_plan_tasks = _task_progress_counts(plan_object_id, user_id)
+    progress_percent = (
+        round((completed_plan_tasks / total_plan_tasks) * 100)
+        if total_plan_tasks > 0
+        else 0
+    )
+
+    update_fields = {
+        "last_studied_at": now,
+        "progress_percent": progress_percent,
+        "updated_at": now
+    }
+
+    db.learning_plans.update_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        },
+        {
+            "$set": update_fields
+        }
+    )
+
+    db.progress_logs.insert_one({
+        "plan_id": plan_object_id,
+        "user_id": user_id,
+        "day": day,
+        "action": "day_completed",
+        "progress_percent": progress_percent,
+        "created_at": now
+    })
+
+    return {
+        "plan_id": plan_id,
+        "day": day,
+        "completed": True,
+        "completed_at": now.isoformat(),
+        "progress_percent": progress_percent,
+        "is_plan_completed": progress_percent == 100
     }
