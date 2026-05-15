@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 
 import certifi
 from bson import ObjectId
@@ -144,6 +144,150 @@ def to_object_id(value: str):
         raise ValueError("Invalid ObjectId format")
 
 
+def _is_completed(doc: Dict[str, Any]) -> bool:
+    return doc.get("completed") is True or doc.get("status") == "completed"
+
+
+def _plan_payload(plan: Dict[str, Any], days: List[Dict[str, Any]]):
+    return {
+        "goal": plan.get("goal"),
+        "topic": plan.get("topic"),
+        "duration_days": plan.get("duration_days") or len(days),
+        "level": plan.get("level"),
+        "daily_minutes": plan.get("daily_minutes"),
+        "learning_outcome": plan.get("learning_outcome"),
+        "days": days
+    }
+
+
+def _resources_by_day(resources: List[Dict[str, Any]]):
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+
+    for resource in resources:
+        day = str(resource.get("day"))
+        grouped.setdefault(day, []).append({
+            "video_id": resource.get("video_id"),
+            "title": resource.get("title"),
+            "description": resource.get("description"),
+            "channel_title": resource.get("channel_title"),
+            "published_at": resource.get("published_at"),
+            "thumbnail_url": resource.get("thumbnail_url"),
+            "url": resource.get("url")
+        })
+
+    return grouped
+
+
+def _shape_saved_tasks(task_docs: List[Dict[str, Any]]):
+    tasks = []
+
+    for task in task_docs:
+        task_id = str(task["_id"])
+
+        if "description" in task:
+            tasks.append({
+                "id": task_id,
+                "plan_id": str(task["plan_id"]),
+                "day": task.get("day"),
+                "description": task.get("description"),
+                "completed": _is_completed(task),
+                "completed_at": (
+                    task.get("completed_at").isoformat()
+                    if isinstance(task.get("completed_at"), datetime)
+                    else task.get("completed_at")
+                )
+            })
+            continue
+
+        completed_indexes = set(task.get("completed_task_indexes", []))
+        legacy_tasks = task.get("tasks", [])
+
+        for index, description in enumerate(legacy_tasks):
+            is_completed = _is_completed(task) or index in completed_indexes
+            tasks.append({
+                "id": f"{task_id}:{index}",
+                "plan_id": str(task["plan_id"]),
+                "day": task.get("day"),
+                "description": description,
+                "completed": is_completed,
+                "completed_at": (
+                    task.get("completed_at").isoformat()
+                    if is_completed and isinstance(task.get("completed_at"), datetime)
+                    else task.get("completed_at") if is_completed else None
+                )
+            })
+
+    return tasks
+
+
+def _days_from_tasks(task_docs: List[Dict[str, Any]]):
+    days_by_number: Dict[int, Dict[str, Any]] = {}
+
+    for task in task_docs:
+        day_number = task.get("day")
+
+        if day_number is None:
+            continue
+
+        day = days_by_number.setdefault(
+            day_number,
+            {
+                "day": day_number,
+                "title": task.get("title") or f"Day {day_number}",
+                "tasks": [],
+                "search_queries": task.get("search_queries", [])
+            }
+        )
+
+        if not day.get("title") and task.get("title"):
+            day["title"] = task.get("title")
+
+        if not day.get("search_queries") and task.get("search_queries"):
+            day["search_queries"] = task.get("search_queries")
+
+        if "description" in task:
+            day["tasks"].append(task.get("description"))
+        else:
+            day["tasks"].extend(task.get("tasks", []))
+
+    return [days_by_number[key] for key in sorted(days_by_number)]
+
+
+def _task_progress_counts(plan_id: ObjectId, user_id: str) -> Tuple[int, int]:
+    task_docs = list(
+        db.learning_tasks.find(
+            {
+                "plan_id": plan_id,
+                "user_id": user_id
+            }
+        )
+    )
+    total_tasks = 0
+    completed_tasks = 0
+
+    for task in task_docs:
+        if "description" in task:
+            total_tasks += 1
+            if _is_completed(task):
+                completed_tasks += 1
+            continue
+
+        legacy_tasks = task.get("tasks", [])
+        total_tasks += len(legacy_tasks)
+
+        if _is_completed(task):
+            completed_tasks += len(legacy_tasks)
+        else:
+            completed_indexes = {
+                index
+                for index in task.get("completed_task_indexes", [])
+                if 0 <= index < len(legacy_tasks)
+            }
+            completed_tasks += len(completed_indexes)
+
+    return total_tasks, completed_tasks
+
+
 def save_learning_plan(
     user_id: str,
     plan: Dict[str, Any],
@@ -166,6 +310,7 @@ def save_learning_plan(
         "level": plan.get("level"),
         "daily_minutes": plan.get("daily_minutes"),
         "learning_outcome": plan.get("learning_outcome"),
+        "days": plan.get("days", []),
         "status": "active",
         "progress_percent": 0,
         "created_at": now,
@@ -178,17 +323,21 @@ def save_learning_plan(
     task_docs = []
 
     for day in plan.get("days", []):
-        task_docs.append({
-            "plan_id": plan_id,
-            "user_id": user_id,
-            "day": day.get("day"),
-            "title": day.get("title"),
-            "tasks": day.get("tasks", []),
-            "search_queries": day.get("search_queries", []),
-            "status": "pending",
-            "created_at": now,
-            "updated_at": now
-        })
+        for index, task in enumerate(day.get("tasks", [])):
+            task_docs.append({
+                "plan_id": plan_id,
+                "user_id": user_id,
+                "day": day.get("day"),
+                "day_task_index": index,
+                "title": day.get("title"),
+                "description": task,
+                "search_queries": day.get("search_queries", []),
+                "status": "pending",
+                "completed": False,
+                "completed_at": None,
+                "created_at": now,
+                "updated_at": now
+            })
 
     task_ids = []
 
@@ -210,6 +359,7 @@ def save_learning_plan(
                     "title": resource.get("title"),
                     "description": resource.get("description"),
                     "channel_title": resource.get("channel_title"),
+                    "published_at": resource.get("published_at"),
                     "thumbnail_url": resource.get("thumbnail_url"),
                     "url": resource.get("url"),
                     "created_at": now
@@ -229,9 +379,27 @@ def save_learning_plan(
         "created_at": now
     })
 
+    saved_task_docs = []
+
+    if task_ids:
+        saved_task_docs = list(
+            db.learning_tasks.find(
+                {
+                    "_id": {
+                        "$in": task_ids
+                    }
+                }
+            ).sort([("day", 1), ("day_task_index", 1)])
+        )
+
     return {
-        "plan_id": str(plan_id),
-        "task_ids": [str(task_id) for task_id in task_ids],
+        "id": str(plan_id),
+        "user_id": user_id,
+        "plan": _plan_payload(plan_doc, plan.get("days", [])),
+        "resources_by_day": resources_by_day or {},
+        "created_at": now.isoformat(),
+        "is_active": True,
+        "tasks": _shape_saved_tasks(saved_task_docs),
         "resource_ids": [str(resource_id) for resource_id in resource_ids]
     }
 
@@ -262,7 +430,7 @@ def get_active_learning_plan(user_id: str):
                 "plan_id": plan_id,
                 "user_id": user_id
             }
-        ).sort("day", 1)
+        ).sort([("day", 1), ("day_task_index", 1)])
     )
 
     resources = list(
@@ -274,10 +442,20 @@ def get_active_learning_plan(user_id: str):
         ).sort("day", 1)
     )
 
+    days = plan.get("days") or _days_from_tasks(tasks)
+
     return {
-        "plan": serialize_mongo_doc(plan),
-        "tasks": serialize_mongo_doc(tasks),
-        "resources": serialize_mongo_doc(resources)
+        "id": str(plan_id),
+        "user_id": user_id,
+        "plan": _plan_payload(plan, days),
+        "resources_by_day": _resources_by_day(resources),
+        "created_at": (
+            plan.get("created_at").isoformat()
+            if isinstance(plan.get("created_at"), datetime)
+            else plan.get("created_at")
+        ),
+        "is_active": plan.get("status") == "active",
+        "tasks": _shape_saved_tasks(tasks)
     }
 
 
@@ -288,7 +466,18 @@ def complete_learning_task(task_id: str, user_id: str):
     """
     client.admin.command("ping")
 
-    task_object_id = to_object_id(task_id)
+    legacy_task_index = None
+    mongo_task_id = task_id
+
+    if ":" in task_id:
+        mongo_task_id, index = task_id.split(":", 1)
+
+        try:
+            legacy_task_index = int(index)
+        except ValueError:
+            raise ValueError("Invalid task id")
+
+    task_object_id = to_object_id(mongo_task_id)
 
     task = db.learning_tasks.find_one(
         {
@@ -303,34 +492,49 @@ def complete_learning_task(task_id: str, user_id: str):
     plan_id = task["plan_id"]
     now = datetime.now(timezone.utc)
 
-    db.learning_tasks.update_one(
-        {
-            "_id": task_object_id,
-            "user_id": user_id
-        },
-        {
-            "$set": {
-                "status": "completed",
-                "completed_at": now,
-                "updated_at": now
+    if legacy_task_index is None:
+        db.learning_tasks.update_one(
+            {
+                "_id": task_object_id,
+                "user_id": user_id
+            },
+            {
+                "$set": {
+                    "status": "completed",
+                    "completed": True,
+                    "completed_at": now,
+                    "updated_at": now
+                }
             }
-        }
-    )
+        )
+    else:
+        legacy_tasks = task.get("tasks", [])
 
-    total_tasks = db.learning_tasks.count_documents(
-        {
-            "plan_id": plan_id,
-            "user_id": user_id
-        }
-    )
+        if legacy_task_index < 0 or legacy_task_index >= len(legacy_tasks):
+            raise ValueError("Task not found")
 
-    completed_tasks = db.learning_tasks.count_documents(
-        {
-            "plan_id": plan_id,
-            "user_id": user_id,
-            "status": "completed"
+        completed_indexes = set(task.get("completed_task_indexes", []))
+        completed_indexes.add(legacy_task_index)
+        update_fields = {
+            "completed_task_indexes": sorted(completed_indexes),
+            "updated_at": now
         }
-    )
+
+        if len(completed_indexes) == len(legacy_tasks):
+            update_fields["status"] = "completed"
+            update_fields["completed_at"] = now
+
+        db.learning_tasks.update_one(
+            {
+                "_id": task_object_id,
+                "user_id": user_id
+            },
+            {
+                "$set": update_fields
+            }
+        )
+
+    total_tasks, completed_tasks = _task_progress_counts(plan_id, user_id)
 
     progress_percent = 0
 
@@ -393,16 +597,47 @@ def get_next_learning_task(plan_id: str, user_id: str):
     if not plan:
         raise ValueError("Learning plan not found")
 
-    next_task = db.learning_tasks.find_one(
-        {
-            "plan_id": plan_object_id,
-            "user_id": user_id,
-            "status": {
-                "$ne": "completed"
+    task_docs = list(
+        db.learning_tasks.find(
+            {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "status": {
+                    "$ne": "completed"
+                }
             }
-        },
-        sort=[("day", 1)]
+        ).sort([("day", 1), ("day_task_index", 1)])
     )
+    next_task = None
+
+    for task in task_docs:
+        if "description" in task:
+            next_task = {
+                "id": str(task["_id"]),
+                "plan_id": str(task["plan_id"]),
+                "day": task.get("day"),
+                "description": task.get("description"),
+                "completed": False,
+                "completed_at": None
+            }
+            break
+
+        completed_indexes = set(task.get("completed_task_indexes", []))
+
+        for index, description in enumerate(task.get("tasks", [])):
+            if index not in completed_indexes:
+                next_task = {
+                    "id": f"{task['_id']}:{index}",
+                    "plan_id": str(task["plan_id"]),
+                    "day": task.get("day"),
+                    "description": description,
+                    "completed": False,
+                    "completed_at": None
+                }
+                break
+
+        if next_task:
+            break
 
     if not next_task:
         return {
@@ -426,7 +661,7 @@ def get_next_learning_task(plan_id: str, user_id: str):
 
     return {
         "is_completed": False,
-        "message": f"Continue with Day {day}: {next_task.get('title')}",
-        "task": serialize_mongo_doc(next_task),
+        "message": f"Continue with Day {day}: {next_task.get('description')}",
+        "task": next_task,
         "resources": serialize_mongo_doc(resources)
     }

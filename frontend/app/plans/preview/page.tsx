@@ -13,9 +13,27 @@ import type {
   YouTubeVideo,
 } from "@/lib/types";
 
+function readDraftPlan() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = window.sessionStorage.getItem("learnmate.draft_plan");
+
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as LearningPlan;
+  } catch {
+    return null;
+  }
+}
+
 function PreviewInner() {
   const router = useRouter();
-  const [plan, setPlan] = useState<LearningPlan | null>(null);
+  const [plan] = useState<LearningPlan | null>(() => readDraftPlan());
   const [openDay, setOpenDay] = useState<number | null>(1);
   const [resources, setResources] = useState<ResourcesByDay>({});
   const [loadingDay, setLoadingDay] = useState<number | null>(null);
@@ -23,17 +41,10 @@ function PreviewInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("learnmate.draft_plan");
-    if (!stored) {
-      router.replace("/plans/new");
-      return;
-    }
-    try {
-      setPlan(JSON.parse(stored));
-    } catch {
+    if (!plan) {
       router.replace("/plans/new");
     }
-  }, [router]);
+  }, [plan, router]);
 
   const loadVideosForDay = async (day: number) => {
     if (!plan || resources[String(day)] || loadingDay === day) return;
@@ -66,7 +77,11 @@ function PreviewInner() {
 
   useEffect(() => {
     if (plan && plan.days.length > 0) {
-      loadVideosForDay(plan.days[0].day);
+      const timeout = window.setTimeout(() => {
+        void loadVideosForDay(plan.days[0].day);
+      }, 0);
+
+      return () => window.clearTimeout(timeout);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan]);
