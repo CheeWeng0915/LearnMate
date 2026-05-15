@@ -48,7 +48,7 @@ frontend/
 
 - **No new heavy deps** — uses only Next 16 / React 19 / Tailwind v4. No shadcn (incompatible with TW v4), no TanStack Query, no react-hook-form. Plain `useState`/`fetch` + custom Tailwind components.
 - **Auth flow** uses the existing `app/api/[...path]/route.ts` proxy — cookies, refresh tokens, Cloud Run identity tokens are all handled there. Frontend just calls `/api/...`.
-- **Turnstile** — uses Cloudflare's localhost test sitekey (`1x00000000000000000000AA`) by default. Production should set `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+- **Turnstile** — requires `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to be set.
 - **Auth pages use a 2-column split** (gradient brand panel + form). Collapses to single column on mobile.
 - **Brand colors**: indigo-600 primary, amber-500 accent (streaks), slate neutrals. Inter font.
 - **All pages mobile-responsive** — verified at 390×844 (iPhone) and 1280×900 (desktop).
@@ -60,7 +60,7 @@ frontend/
 - ✅ `npm run dev` — boots in < 2s with Turbopack
 - ✅ Zero browser console errors on page load
 - ✅ Auth guard correctly redirects unauthenticated users to `/login`
-- ✅ Cloudflare Turnstile widget loads with test sitekey on localhost
+- ✅ Cloudflare Turnstile widget loads with configured sitekey
 - ✅ Landing, login, register, plan generator forms all render correctly desktop + mobile
 
 ## Not yet verified end-to-end
