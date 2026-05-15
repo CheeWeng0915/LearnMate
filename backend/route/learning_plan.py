@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from schema.learning_plan_schema import (
     LearningPlanGenerateRequest,
+    LearningDayNoteRequest,
     SaveLearningPlanRequest
 )
 
@@ -10,7 +11,10 @@ from service.gemini_service import generate_learning_plan
 from service.mongodb_service import (
     save_learning_plan,
     get_active_learning_plan,
-    get_next_learning_task
+    get_next_learning_task,
+    get_learning_day_note,
+    save_learning_day_note,
+    complete_learning_day
 )
 from service.quota_service import DAILY_LEARNING_PLAN_LIMIT, enforce_user_quota
 
@@ -131,6 +135,113 @@ def get_next_task(
     except ValueError as e:
         raise HTTPException(
             status_code=404,
+            detail=str(e)
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@router.get("/{plan_id}/days/{day}/note")
+def get_day_note(
+    plan_id: str,
+    day: int,
+    current_user=Depends(get_current_user)
+):
+    try:
+        result = get_learning_day_note(
+            plan_id=plan_id,
+            day=day,
+            user_id=current_user["id"]
+        )
+
+        return {
+            "success": True,
+            "message": "Learning day note fetched successfully",
+            "data": result
+        }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@router.put("/{plan_id}/days/{day}/note")
+def save_day_note(
+    plan_id: str,
+    day: int,
+    request: LearningDayNoteRequest,
+    current_user=Depends(get_current_user)
+):
+    try:
+        result = save_learning_day_note(
+            plan_id=plan_id,
+            day=day,
+            note=request.note,
+            user_id=current_user["id"]
+        )
+
+        return {
+            "success": True,
+            "message": "Learning day note saved successfully",
+            "data": result
+        }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@router.patch("/{plan_id}/days/{day}/complete")
+def complete_day(
+    plan_id: str,
+    day: int,
+    current_user=Depends(get_current_user)
+):
+    try:
+        result = complete_learning_day(
+            plan_id=plan_id,
+            day=day,
+            user_id=current_user["id"]
+        )
+
+        return {
+            "success": True,
+            "message": "Learning day completed successfully",
+            "data": result
+        }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
             detail=str(e)
         )
 

@@ -47,6 +47,7 @@ export type GeneratePlanRequest = {
 };
 
 export type YouTubeVideo = {
+  id?: string;
   video_id: string;
   title: string;
   description: string;
@@ -54,6 +55,8 @@ export type YouTubeVideo = {
   published_at: string;
   thumbnail_url: string;
   url: string;
+  completed?: boolean;
+  completed_at?: string | null;
 };
 
 export type YouTubeSearchResponse = {
@@ -69,6 +72,7 @@ export type SavedPlan = {
   plan: LearningPlan;
   resources_by_day?: ResourcesByDay;
   created_at: string;
+  last_studied_at?: string | null;
   is_active: boolean;
   tasks?: SavedTask[];
 };
@@ -80,4 +84,21 @@ export type SavedTask = {
   description: string;
   completed: boolean;
   completed_at?: string | null;
+};
+
+export type DayNote = {
+  id?: string;
+  plan_id: string;
+  day: number;
+  note: string;
+  updated_at?: string | null;
+};
+
+export type CompleteDayResponse = {
+  plan_id: string;
+  day: number;
+  completed: boolean;
+  completed_at: string;
+  progress_percent: number;
+  is_plan_completed: boolean;
 };

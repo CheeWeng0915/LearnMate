@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "./auth-context";
+import { Logo } from "./logo";
 
 export function Nav() {
   const { user, logout } = useAuth();
@@ -20,17 +21,10 @@ export function Nav() {
   return (
     <nav className="bg-canvas/90 backdrop-blur border-b border-hairline sticky top-0 z-30">
       <div className="max-w-6xl mx-auto px-6 py-3.5 flex justify-between items-center">
-        <Link
+        <Logo
           href={user ? "/dashboard" : "/"}
-          className="flex items-center gap-2"
-        >
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center text-on-primary font-bold text-sm">
-            L
-          </div>
-          <span className="font-semibold text-[15px] text-charcoal">
-            LearnMate
-          </span>
-        </Link>
+          imageClassName="h-9 w-auto max-w-[150px] sm:max-w-[174px]"
+        />
 
         {user ? (
           <div className="flex items-center gap-2">

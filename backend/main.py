@@ -6,6 +6,7 @@ from route.auth import router as auth_router
 from route.learning_plan import router as learning_plan_router
 from route.youtube import router as youtube_router
 from route.task import router as task_router
+from route.resource import router as resource_router
 from service.mongodb_service import ensure_database_indexes
 
 
@@ -33,6 +34,7 @@ app.include_router(auth_router)
 app.include_router(learning_plan_router)
 app.include_router(youtube_router)
 app.include_router(task_router)
+app.include_router(resource_router)
 
 
 @app.on_event("startup")

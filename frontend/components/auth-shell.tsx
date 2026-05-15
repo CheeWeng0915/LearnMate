@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { Logo } from "./logo";
 
 export function AuthShell({
   title,
@@ -39,14 +39,7 @@ export function AuthShell({
       {/* Header with logo */}
       <header className="relative z-10">
         <div className="px-6 py-4">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-on-primary font-bold text-sm">
-              L
-            </div>
-            <span className="font-semibold text-[15px] text-charcoal">
-              LearnMate
-            </span>
-          </Link>
+          <Logo imageClassName="h-10 w-auto max-w-[180px]" />
         </div>
       </header>
 

@@ -37,6 +37,48 @@ function finishByDate(plan: SavedPlan, completedDays: number) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function dateKey(value: string) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return "Not yet";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function computeStudyInsights(plan: SavedPlan, today: number) {
+  const completedDates = new Set(
+    (plan.tasks ?? [])
+      .map((task) => task.completed_at)
+      .filter((value): value is string => Boolean(value))
+      .map(dateKey)
+  );
+  let streak = 0;
+  const cursor = new Date();
+
+  while (completedDates.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  const latestTaskDate = (plan.tasks ?? [])
+    .map((task) => task.completed_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const stuckDay = plan.plan.days.find((day) => day.day === today);
+
+  return {
+    streak,
+    lastStudiedAt: plan.last_studied_at || latestTaskDate || null,
+    stuckLabel: stuckDay ? `Day ${stuckDay.day}` : "Done",
+    stuckTitle: stuckDay?.title || "Plan complete",
+  };
+}
+
 function DashboardInner() {
   const { user } = useAuth();
   const [plan, setPlan] = useState<SavedPlan | null>(null);
@@ -106,6 +148,7 @@ function DashboardInner() {
 
   const progress = computeProgress(plan);
   const todayDay = plan.plan.days.find((d) => d.day === progress.today);
+  const insights = computeStudyInsights(plan, progress.today);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -207,6 +250,36 @@ function DashboardInner() {
           </div>
           <div className="text-[12px] font-semibold uppercase tracking-[1px] text-charcoal/70">
             Finish line
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+        <div className="bg-tint-yellow rounded-xl p-6">
+          <div className="text-3xl font-semibold text-charcoal mb-1">
+            {insights.streak}
+          </div>
+          <div className="text-[12px] font-semibold uppercase tracking-[1px] text-charcoal/70">
+            Day streak
+          </div>
+        </div>
+        <div className="bg-tint-sky rounded-xl p-6">
+          <div className="text-3xl font-semibold text-charcoal mb-1">
+            {formatShortDate(insights.lastStudiedAt)}
+          </div>
+          <div className="text-[12px] font-semibold uppercase tracking-[1px] text-charcoal/70">
+            Last studied
+          </div>
+        </div>
+        <div className="bg-tint-rose rounded-xl p-6">
+          <div className="text-3xl font-semibold text-charcoal mb-1">
+            {insights.stuckLabel}
+          </div>
+          <div
+            className="text-[12px] font-semibold uppercase tracking-[1px] text-charcoal/70 truncate"
+            title={insights.stuckTitle}
+          >
+            Current focus
           </div>
         </div>
       </div>

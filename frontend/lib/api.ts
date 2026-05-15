@@ -1,5 +1,7 @@
 import type {
   ApiResponse,
+  CompleteDayResponse,
+  DayNote,
   GeneratePlanRequest,
   LearningPlan,
   LoginRequest,
@@ -82,6 +84,18 @@ export const planApi = {
     request<{ day: number; task: string } | null>(
       `learning-plans/${planId}/next`
     ),
+  dayNote: (planId: string, day: number) =>
+    request<DayNote>(`learning-plans/${planId}/days/${day}/note`),
+  saveDayNote: (planId: string, day: number, note: string) =>
+    request<DayNote>(`learning-plans/${planId}/days/${day}/note`, {
+      method: "PUT",
+      body: JSON.stringify({ note }),
+    }),
+  completeDay: (planId: string, day: number) =>
+    request<CompleteDayResponse>(
+      `learning-plans/${planId}/days/${day}/complete`,
+      { method: "PATCH" }
+    ),
 };
 
 // Tasks
@@ -89,6 +103,15 @@ export const taskApi = {
   complete: (taskId: string) =>
     request<{ task: { id: string; completed: boolean } }>(
       `tasks/${taskId}/complete`,
+      { method: "PATCH" }
+    ),
+};
+
+// Resources
+export const resourceApi = {
+  complete: (resourceId: string) =>
+    request<{ id: string; completed: boolean; completed_at: string }>(
+      `resources/${resourceId}/complete`,
       { method: "PATCH" }
     ),
 };
