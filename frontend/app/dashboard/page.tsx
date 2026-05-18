@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { AuthGuard } from "@/components/auth-guard";
 import { useAuth } from "@/components/auth-context";
-import { planApi, ApiError } from "@/lib/api";
-import type { SavedPlan } from "@/lib/types";
+import { agentApi, planApi, ApiError } from "@/lib/api";
+import type { CoachAgentResponse, SavedPlan } from "@/lib/types";
 
 function computeProgress(plan: SavedPlan) {
   const total = plan.plan.duration_days;
@@ -84,6 +84,11 @@ function DashboardInner() {
   const [plan, setPlan] = useState<SavedPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [coachQuestion, setCoachQuestion] = useState("");
+  const [coachResponse, setCoachResponse] =
+    useState<CoachAgentResponse | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachError, setCoachError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -150,6 +155,24 @@ function DashboardInner() {
   const todayDay = plan.plan.days.find((d) => d.day === progress.today);
   const insights = computeStudyInsights(plan, progress.today);
 
+  async function askCoach() {
+    setCoachLoading(true);
+    setCoachError(null);
+
+    try {
+      const response = await agentApi.coach(coachQuestion);
+      setCoachResponse(response.data);
+    } catch (err) {
+      setCoachError(
+        err instanceof ApiError
+          ? err.message
+          : "The coach agent could not respond"
+      );
+    } finally {
+      setCoachLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
       <div className="mb-10">
@@ -186,6 +209,89 @@ function DashboardInner() {
             </Link>
           )}
         </div>
+      </div>
+
+      <div className="bg-canvas border border-hairline rounded-xl p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-tint-mint text-brand-green text-[11px] font-semibold uppercase tracking-[1px] rounded-full px-3 py-1 mb-3">
+              AI Coach
+            </div>
+            <h3 className="text-2xl font-semibold text-charcoal">
+              Ask about your next study move
+            </h3>
+          </div>
+          {coachResponse && (
+            <div className="text-[12px] text-steel bg-surface rounded-md px-3 py-2">
+              {coachResponse.agent.context_source === "mongodb_mcp_server"
+                ? "MongoDB MCP"
+                : "MongoDB"}{" "}
+              · {coachResponse.agent.model}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <textarea
+            value={coachQuestion}
+            onChange={(event) => setCoachQuestion(event.target.value)}
+            className="min-h-24 w-full resize-none rounded-md border border-hairline bg-surface-soft px-4 py-3 text-[14px] text-charcoal outline-none focus:border-primary"
+            maxLength={500}
+            placeholder="What should I focus on today?"
+          />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <button
+              type="button"
+              onClick={askCoach}
+              disabled={coachLoading}
+              className="inline-flex h-11 items-center justify-center rounded-md bg-charcoal px-5 text-[14px] font-medium text-on-dark transition-colors hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {coachLoading ? "Thinking..." : "Ask coach"}
+            </button>
+            {coachError && (
+              <p className="text-[13px] text-error">{coachError}</p>
+            )}
+          </div>
+        </div>
+
+        {coachResponse && (
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr] gap-4">
+            <div className="bg-surface-soft border border-hairline-soft rounded-lg p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[1px] text-steel mb-2">
+                Recommendation
+              </p>
+              <p className="text-charcoal font-medium leading-relaxed mb-3">
+                {coachResponse.coach.recommendation}
+              </p>
+              <p className="text-[14px] text-slate leading-relaxed">
+                {coachResponse.coach.summary}
+              </p>
+              {coachResponse.coach.question_answer && (
+                <p className="text-[14px] text-slate leading-relaxed mt-3">
+                  {coachResponse.coach.question_answer}
+                </p>
+              )}
+            </div>
+            <div className="bg-tint-yellow rounded-lg p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[1px] text-charcoal/70 mb-3">
+                Next actions
+              </p>
+              <ul className="space-y-2">
+                {coachResponse.coach.next_actions.map((action) => (
+                  <li
+                    key={action}
+                    className="text-[14px] text-charcoal leading-relaxed"
+                  >
+                    {action}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[13px] text-charcoal/75 mt-4 leading-relaxed">
+                {coachResponse.coach.motivation}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Progress strip + day grid */}
