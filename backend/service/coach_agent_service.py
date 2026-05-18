@@ -10,6 +10,7 @@ from service.gemini_service import GEMINI_MODEL, client, clean_json_response
 from service.mongodb_service import (
     db,
     get_active_learning_plan,
+    get_learning_profile,
     get_next_learning_task,
     serialize_mongo_doc,
     to_object_id
@@ -96,10 +97,12 @@ def _resource_summary(resources_by_day: Dict[str, List[Dict[str, Any]]]):
 
 def get_learning_context_for_agent(user_id: str):
     active_plan = get_active_learning_plan(user_id=user_id)
+    profile = get_learning_profile(user_id=user_id)
 
     if not active_plan:
         return {
             "has_active_plan": False,
+            "profile": profile,
             "plan": None,
             "tasks": [],
             "next": None,
@@ -126,6 +129,7 @@ def get_learning_context_for_agent(user_id: str):
 
     return {
         "has_active_plan": True,
+        "profile": profile,
         "plan": {
             "id": active_plan["id"],
             "goal": active_plan["plan"].get("goal"),
@@ -221,6 +225,7 @@ def generate_coach_response(user_id: str, question: Optional[str] = None):
 You are LearnMate's Learning Progress Coach Agent.
 
 Use the learner's saved MongoDB learning state to provide concise, practical coaching.
+Adapt your tone, examples, and next actions to the learner profile when profile fields are present.
 Do not invent completed work, notes, or resources.
 
 Learner question:

@@ -65,6 +65,13 @@ export function Nav() {
                       My plan
                     </Link>
                     <Link
+                      href="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] hover:bg-surface text-charcoal"
+                    >
+                      Learning profile
+                    </Link>
+                    <Link
                       href="/plans/new"
                       onClick={() => setMenuOpen(false)}
                       className="block sm:hidden px-4 py-2 text-[13px] hover:bg-surface text-charcoal"

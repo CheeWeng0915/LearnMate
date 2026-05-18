@@ -5,6 +5,7 @@ from route.health import router as health_router
 from route.auth import router as auth_router
 from route.agent import router as agent_router
 from route.learning_plan import router as learning_plan_router
+from route.profile import router as profile_router
 from route.youtube import router as youtube_router
 from route.task import router as task_router
 from route.resource import router as resource_router
@@ -34,6 +35,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(learning_plan_router)
+app.include_router(profile_router)
 app.include_router(youtube_router)
 app.include_router(task_router)
 app.include_router(resource_router)

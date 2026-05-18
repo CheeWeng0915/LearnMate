@@ -7,8 +7,14 @@ import { use, useEffect, useMemo, useState } from "react";
 import { Nav } from "@/components/nav";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
-import { ApiError, planApi, resourceApi, taskApi } from "@/lib/api";
-import type { LearningDay, SavedPlan, SavedTask, YouTubeVideo } from "@/lib/types";
+import { agentApi, ApiError, planApi, resourceApi, taskApi } from "@/lib/api";
+import type {
+  LearningDay,
+  LearningReview,
+  SavedPlan,
+  SavedTask,
+  YouTubeVideo,
+} from "@/lib/types";
 
 type Props = {
   params: Promise<{ planId: string; dayNumber: string }>;
@@ -44,6 +50,10 @@ function DayInner({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [finishMessage, setFinishMessage] = useState<string | null>(null);
   const [finishingDay, setFinishingDay] = useState(false);
+  const [review, setReview] = useState<LearningReview | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewGenerating, setReviewGenerating] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -90,6 +100,29 @@ function DayInner({
       })
       .finally(() => {
         if (mounted) setNoteLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [planId, dayNumber]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    agentApi
+      .latestReview(planId, dayNumber)
+      .then((res) => {
+        if (mounted) setReview(res.data ?? null);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setReviewError(
+          err instanceof ApiError ? err.message : "Couldn't load the review"
+        );
+      })
+      .finally(() => {
+        if (mounted) setReviewLoading(false);
       });
 
     return () => {
@@ -233,6 +266,22 @@ function DayInner({
       );
     } finally {
       setFinishingDay(false);
+    }
+  };
+
+  const onGenerateReview = async () => {
+    setReviewGenerating(true);
+    setReviewError(null);
+
+    try {
+      const res = await agentApi.review(planId, dayNumber);
+      setReview(res.data);
+    } catch (err) {
+      setReviewError(
+        err instanceof ApiError ? err.message : "Couldn't generate a review"
+      );
+    } finally {
+      setReviewGenerating(false);
     }
   };
 
@@ -413,6 +462,71 @@ function DayInner({
             Save note
           </Button>
         </div>
+      </section>
+
+      <section className="bg-canvas border border-hairline rounded-xl p-5 mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-[1px] text-primary mb-1">
+              Smart Review
+            </p>
+            <h2 className="text-[18px] font-semibold text-charcoal">
+              Review quiz for today
+            </h2>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="dark"
+            onClick={onGenerateReview}
+            loading={reviewGenerating}
+            disabled={reviewLoading}
+          >
+            {review ? "Regenerate review" : "Generate review"}
+          </Button>
+        </div>
+
+        {reviewError && (
+          <div className="bg-tint-rose border border-error/20 text-error text-[13px] rounded-md px-3 py-2 mb-3">
+            {reviewError}
+          </div>
+        )}
+
+        {reviewLoading ? (
+          <div className="space-y-2">
+            <div className="h-4 bg-surface rounded animate-pulse" />
+            <div className="h-4 bg-surface rounded animate-pulse w-3/4" />
+          </div>
+        ) : review ? (
+          <div className="space-y-4">
+            <p className="text-[14px] text-slate leading-relaxed">
+              {review.summary}
+            </p>
+            <div className="space-y-3">
+              {review.questions.map((question, index) => (
+                <div
+                  key={`${question}-${index}`}
+                  className="bg-surface-soft border border-hairline-soft rounded-md p-4"
+                >
+                  <p className="text-[13px] font-semibold text-charcoal mb-2">
+                    {index + 1}. {question}
+                  </p>
+                  <p className="text-[13px] text-steel leading-relaxed">
+                    {review.answer_key[index]}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="bg-tint-yellow rounded-md p-4 text-[13px] text-charcoal leading-relaxed">
+              {review.recommended_review_action}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[14px] text-steel leading-relaxed">
+            Generate a short quiz from your tasks, notes, and watched resources
+            for this day.
+          </p>
+        )}
       </section>
 
       {finishMessage && (

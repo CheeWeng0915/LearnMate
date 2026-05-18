@@ -102,6 +102,11 @@ def ensure_database_indexes():
             [("user_id", 1), ("plan_id", 1), ("day", 1)],
             unique=True
         )
+        db.learning_profiles.create_index("user_id", unique=True)
+        db.learning_reviews.create_index(
+            [("user_id", 1), ("plan_id", 1), ("day", 1)],
+            unique=True
+        )
     except PyMongoError as exc:
         logger.warning("MongoDB index setup skipped: %s", exc)
 
@@ -297,6 +302,84 @@ def _task_progress_counts(plan_id: ObjectId, user_id: str) -> Tuple[int, int]:
             completed_tasks += len(completed_indexes)
 
     return total_tasks, completed_tasks
+
+
+def _shape_learning_profile(profile: Optional[Dict[str, Any]], user_id: str):
+    if not profile:
+        return {
+            "user_id": user_id,
+            "display_name": "",
+            "learning_style": "",
+            "preferred_language": "",
+            "daily_minutes_default": None,
+            "weekly_goal": "",
+            "focus_areas": [],
+            "created_at": None,
+            "updated_at": None
+        }
+
+    return {
+        "id": str(profile["_id"]),
+        "user_id": profile.get("user_id", user_id),
+        "display_name": profile.get("display_name", ""),
+        "learning_style": profile.get("learning_style", ""),
+        "preferred_language": profile.get("preferred_language", ""),
+        "daily_minutes_default": profile.get("daily_minutes_default"),
+        "weekly_goal": profile.get("weekly_goal", ""),
+        "focus_areas": profile.get("focus_areas", []),
+        "created_at": (
+            profile.get("created_at").isoformat()
+            if isinstance(profile.get("created_at"), datetime)
+            else profile.get("created_at")
+        ),
+        "updated_at": (
+            profile.get("updated_at").isoformat()
+            if isinstance(profile.get("updated_at"), datetime)
+            else profile.get("updated_at")
+        )
+    }
+
+
+def get_learning_profile(user_id: str):
+    client.admin.command("ping")
+
+    profile = db.learning_profiles.find_one({"user_id": user_id})
+    return _shape_learning_profile(profile, user_id)
+
+
+def save_learning_profile(user_id: str, profile: Dict[str, Any]):
+    client.admin.command("ping")
+
+    now = datetime.now(timezone.utc)
+    focus_areas = [
+        str(area).strip()
+        for area in profile.get("focus_areas", [])
+        if str(area).strip()
+    ][:12]
+    update_fields = {
+        "display_name": (profile.get("display_name") or "").strip(),
+        "learning_style": (profile.get("learning_style") or "").strip(),
+        "preferred_language": (profile.get("preferred_language") or "").strip(),
+        "daily_minutes_default": profile.get("daily_minutes_default"),
+        "weekly_goal": (profile.get("weekly_goal") or "").strip(),
+        "focus_areas": focus_areas,
+        "updated_at": now
+    }
+
+    saved_profile = db.learning_profiles.find_one_and_update(
+        {"user_id": user_id},
+        {
+            "$set": update_fields,
+            "$setOnInsert": {
+                "user_id": user_id,
+                "created_at": now
+            }
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+
+    return _shape_learning_profile(saved_profile, user_id)
 
 
 def save_learning_plan(
@@ -908,3 +991,188 @@ def complete_learning_day(plan_id: str, day: int, user_id: str):
         "progress_percent": progress_percent,
         "is_plan_completed": progress_percent == 100
     }
+
+
+def get_learning_review(plan_id: str, day: int, user_id: str):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    review = db.learning_reviews.find_one(
+        {
+            "plan_id": plan_object_id,
+            "user_id": user_id,
+            "day": day
+        }
+    )
+
+    if not review:
+        return None
+
+    return {
+        "id": str(review["_id"]),
+        "plan_id": str(review["plan_id"]),
+        "day": review.get("day"),
+        "summary": review.get("summary", ""),
+        "questions": review.get("questions", []),
+        "answer_key": review.get("answer_key", []),
+        "recommended_review_action": review.get("recommended_review_action", ""),
+        "created_at": (
+            review.get("created_at").isoformat()
+            if isinstance(review.get("created_at"), datetime)
+            else review.get("created_at")
+        ),
+        "updated_at": (
+            review.get("updated_at").isoformat()
+            if isinstance(review.get("updated_at"), datetime)
+            else review.get("updated_at")
+        )
+    }
+
+
+def save_learning_review(
+    plan_id: str,
+    day: int,
+    user_id: str,
+    review: Dict[str, Any]
+):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    plan = db.learning_plans.find_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        }
+    )
+
+    if not plan:
+        raise ValueError("Learning plan not found")
+
+    now = datetime.now(timezone.utc)
+    saved_review = db.learning_reviews.find_one_and_update(
+        {
+            "plan_id": plan_object_id,
+            "user_id": user_id,
+            "day": day
+        },
+        {
+            "$set": {
+                "summary": review.get("summary", ""),
+                "questions": review.get("questions", []),
+                "answer_key": review.get("answer_key", []),
+                "recommended_review_action": review.get(
+                    "recommended_review_action",
+                    ""
+                ),
+                "updated_at": now
+            },
+            "$setOnInsert": {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "day": day,
+                "created_at": now
+            }
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+
+    return get_learning_review(
+        plan_id=str(saved_review["plan_id"]),
+        day=day,
+        user_id=user_id
+    )
+
+
+def get_learning_review_context(plan_id: str, day: int, user_id: str):
+    client.admin.command("ping")
+
+    plan_object_id = to_object_id(plan_id)
+    plan = db.learning_plans.find_one(
+        {
+            "_id": plan_object_id,
+            "user_id": user_id
+        }
+    )
+
+    if not plan:
+        raise ValueError("Learning plan not found")
+
+    day_data = None
+
+    for item in plan.get("days", []):
+        if item.get("day") == day:
+            day_data = item
+            break
+
+    if not day_data:
+        task_days = _days_from_tasks(
+            list(
+                db.learning_tasks.find(
+                    {
+                        "plan_id": plan_object_id,
+                        "user_id": user_id,
+                        "day": day
+                    }
+                )
+            )
+        )
+        day_data = task_days[0] if task_days else None
+
+    if not day_data:
+        raise ValueError("Learning day not found")
+
+    tasks = list(
+        db.learning_tasks.find(
+            {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "day": day
+            }
+        ).sort("day_task_index", 1)
+    )
+    resources = list(
+        db.learning_resources.find(
+            {
+                "plan_id": plan_object_id,
+                "user_id": user_id,
+                "day": day
+            }
+        )
+    )
+    note = db.learning_day_notes.find_one(
+        {
+            "plan_id": plan_object_id,
+            "user_id": user_id,
+            "day": day
+        }
+    )
+
+    return {
+        "plan": {
+            "id": plan_id,
+            "goal": plan.get("goal"),
+            "topic": plan.get("topic"),
+            "level": plan.get("level"),
+            "daily_minutes": plan.get("daily_minutes"),
+            "learning_outcome": plan.get("learning_outcome")
+        },
+        "day": day_data,
+        "tasks": _shape_saved_tasks(tasks),
+        "completed_tasks": [
+            task
+            for task in _shape_saved_tasks(tasks)
+            if task.get("completed")
+        ],
+        "note": {
+            "note": note.get("note", "") if note else "",
+            "updated_at": _iso_datetime(note.get("updated_at")) if note else None
+        },
+        "resources": _resources_by_day(resources).get(str(day), [])
+    }
+
+
+def _iso_datetime(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value

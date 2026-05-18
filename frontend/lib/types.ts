@@ -42,8 +42,21 @@ export type LearningPlan = {
 export type GeneratePlanRequest = {
   goal: string;
   level: "beginner" | "intermediate" | "advanced";
-  daily_minutes: number;
-  language: string;
+  daily_minutes?: number;
+  language?: string;
+};
+
+export type LearningProfile = {
+  id?: string;
+  user_id: string;
+  display_name: string;
+  learning_style: string;
+  preferred_language: string;
+  daily_minutes_default?: number | null;
+  weekly_goal: string;
+  focus_areas: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type YouTubeVideo = {
@@ -119,4 +132,16 @@ export type CoachAgentResponse = {
     motivation: string;
     question_answer: string;
   };
+};
+
+export type LearningReview = {
+  id: string;
+  plan_id: string;
+  day: number;
+  summary: string;
+  questions: string[];
+  answer_key: string[];
+  recommended_review_action: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };

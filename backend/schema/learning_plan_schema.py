@@ -10,8 +10,8 @@ class LearningPlanGenerateRequest(BaseModel):
         example="I want to learn SQL JOIN in 3 days"
     )
     level: str = Field(default="beginner", max_length=40, example="beginner")
-    daily_minutes: int = Field(default=60, ge=5, le=480, example=60)
-    language: str = Field(default="en", min_length=2, max_length=20, example="en")
+    daily_minutes: Optional[int] = Field(default=None, ge=5, le=480, example=60)
+    language: Optional[str] = Field(default=None, min_length=2, max_length=20, example="en")
 
 
 class LearningDay(BaseModel):
