@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Nav } from "@/components/nav";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
-import { planApi, ApiError } from "@/lib/api";
+import { planApi, profileApi, ApiError } from "@/lib/api";
 
 type Level = "beginner" | "intermediate" | "advanced";
 
@@ -30,6 +30,29 @@ function GenerateInner() {
   const [language, setLanguage] = useState("en");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    profileApi
+      .get()
+      .then((res) => {
+        if (!mounted) return;
+        if (res.data.daily_minutes_default) {
+          setDailyMinutes(res.data.daily_minutes_default);
+        }
+        if (res.data.preferred_language) {
+          setLanguage(res.data.preferred_language);
+        }
+      })
+      .catch(() => {
+        // Profile defaults are optional; plan creation still works without them.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -132,7 +155,7 @@ function GenerateInner() {
               id="dailyMinutes"
               type="range"
               min={5}
-              max={180}
+              max={480}
               step={5}
               value={dailyMinutes}
               onChange={(e) => setDailyMinutes(Number(e.target.value))}
@@ -157,6 +180,9 @@ function GenerateInner() {
             onChange={(e) => setLanguage(e.target.value)}
             className="w-full h-11 px-4 border border-hairline-strong rounded-md bg-canvas text-charcoal text-[14px] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
           >
+            {!LANGUAGES.some((item) => item.value === language) && (
+              <option value={language}>{language}</option>
+            )}
             {LANGUAGES.map((l) => (
               <option key={l.value} value={l.value}>
                 {l.label}

@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { AuthGuard } from "@/components/auth-guard";
 import { useAuth } from "@/components/auth-context";
-import { agentApi, planApi, ApiError } from "@/lib/api";
-import type { CoachAgentResponse, SavedPlan } from "@/lib/types";
+import { agentApi, planApi, profileApi, ApiError } from "@/lib/api";
+import type { CoachAgentResponse, LearningProfile, SavedPlan } from "@/lib/types";
 
 function computeProgress(plan: SavedPlan) {
   const total = plan.plan.duration_days;
@@ -82,6 +82,7 @@ function computeStudyInsights(plan: SavedPlan, today: number) {
 function DashboardInner() {
   const { user } = useAuth();
   const [plan, setPlan] = useState<SavedPlan | null>(null);
+  const [profile, setProfile] = useState<LearningProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [coachQuestion, setCoachQuestion] = useState("");
@@ -92,10 +93,11 @@ function DashboardInner() {
 
   useEffect(() => {
     let mounted = true;
-    planApi
-      .active()
-      .then((res) => {
-        if (mounted) setPlan(res.data ?? null);
+    Promise.all([planApi.active(), profileApi.get()])
+      .then(([planRes, profileRes]) => {
+        if (!mounted) return;
+        setPlan(planRes.data ?? null);
+        setProfile(profileRes.data);
       })
       .catch((err) => {
         if (!mounted) return;
@@ -177,11 +179,37 @@ function DashboardInner() {
     <div className="max-w-5xl mx-auto px-6 py-12">
       <div className="mb-10">
         <p className="text-slate text-[14px] mb-2">
-          Welcome back, {user?.name || "learner"}
+          Welcome back, {profile?.display_name || user?.name || "learner"}
         </p>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-charcoal">
           Let&rsquo;s keep going.
         </h1>
+      </div>
+
+      <div className="bg-canvas border border-hairline rounded-xl p-5 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-[1px] text-steel mb-1">
+            Your learning profile
+          </p>
+          <p className="text-[14px] text-charcoal">
+            {profile?.learning_style || "Style not set"} ·{" "}
+            {profile?.preferred_language || "Language not set"} ·{" "}
+            {profile?.daily_minutes_default
+              ? `${profile.daily_minutes_default} min default`
+              : "No time default"}
+          </p>
+          {profile?.focus_areas?.length ? (
+            <p className="text-[13px] text-steel mt-1">
+              Focus: {profile.focus_areas.join(", ")}
+            </p>
+          ) : null}
+        </div>
+        <Link
+          href="/profile"
+          className="inline-flex items-center justify-center h-9 px-3 rounded-md border border-hairline-strong text-[13px] font-medium text-charcoal hover:bg-surface"
+        >
+          Edit profile
+        </Link>
       </div>
 
       {/* Today's card — purple primary */}

@@ -38,7 +38,21 @@ def clean_json_response(raw_text: str) -> str:
     return text
 
 
-def generate_learning_plan(goal: str, level: str, daily_minutes: int, language: str):
+def generate_learning_plan(
+    goal: str,
+    level: str,
+    daily_minutes: int,
+    language: str,
+    learning_profile=None
+):
+    profile = learning_profile or {}
+    profile_context = {
+        "display_name": profile.get("display_name"),
+        "learning_style": profile.get("learning_style"),
+        "preferred_language": profile.get("preferred_language"),
+        "weekly_goal": profile.get("weekly_goal"),
+        "focus_areas": profile.get("focus_areas", [])
+    }
     prompt = f"""
 You are LearnMate, an AI learning agent.
 
@@ -48,12 +62,15 @@ User goal: {goal}
 User level: {level}
 Daily study time: {daily_minutes} minutes
 Preferred language: {language}
+Saved learning profile:
+{json.dumps(profile_context, ensure_ascii=False, indent=2)}
 
 Important rules:
 - Return ONLY valid JSON.
 - Do not include markdown.
 - Do not include explanation outside JSON.
 - Make the plan practical for a beginner.
+- Adapt task wording, examples, pacing, and resource search queries to the saved learning profile when present.
 - Each day must include search_queries for YouTube search.
 - duration_days should be inferred from the user's goal. If not clear, use 3.
 

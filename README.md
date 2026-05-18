@@ -24,12 +24,14 @@ The current application already uses Gemini for learning plan generation and Mon
   - Current level
   - Daily study time
   - Preferred language
+- Account-scoped learning profiles with preferred style, language, default study time, weekly goal, and focus areas
 - Save and retrieve an active learning plan
 - View the next daily task
 - Mark tasks and resources complete
 - Add and edit daily learning notes
 - Search YouTube learning resources by topic
 - Ask the Learning Progress Coach Agent for a personalized next step based on saved plan progress, tasks, notes, and resources
+- Generate a Smart Review quiz for a learning day from the current user's saved plan, completed tasks, notes, and resources
 
 ## Tech Stack
 
@@ -58,12 +60,13 @@ Next.js Frontend
 FastAPI Backend
   |--- Gemini API: generates structured learning plans
   |--- Coach Agent: summarizes progress and recommends next actions
-  |--- MongoDB: stores users, plans, tasks, notes, and progress
+  |--- Smart Review Agent: creates short account-scoped review quizzes
+  |--- MongoDB: stores users, profiles, plans, tasks, notes, reviews, and progress
   |--- YouTube Data API: finds learning resources
   |--- Turnstile: verifies registration requests
 ```
 
-The app includes a production route at `POST /api/agent/coach`. It authenticates the current user, reads their saved learning context from MongoDB, and uses Gemini to return a structured coaching response. The repository also includes `backend/agent/agent.py`, an ADK-compatible agent entrypoint configured for the official MongoDB MCP server so the same coach concept can be demonstrated through the Google Agent Builder / ADK MCP path.
+The app includes production routes at `POST /api/agent/coach` and `POST /api/agent/review`. They authenticate the current user, read account-scoped learning profile and progress data from MongoDB, and use Gemini to return structured coaching or review responses. The repository also includes `backend/agent/agent.py`, an ADK-compatible agent entrypoint configured for the official MongoDB MCP server so the same coach concept can be demonstrated through the Google Agent Builder / ADK MCP path.
 
 ## Repository Structure
 
@@ -171,7 +174,11 @@ All backend routes are prefixed with `/api`.
 | Auth | POST | `/auth/refresh` |
 | Auth | POST | `/auth/logout` |
 | Auth | GET | `/auth/me` |
+| Profile | GET | `/profile` |
+| Profile | PUT | `/profile` |
 | Agent | POST | `/agent/coach` |
+| Agent | GET | `/agent/review/{plan_id}/{day}` |
+| Agent | POST | `/agent/review` |
 | Learning Plans | POST | `/learning-plans/generate` |
 | Learning Plans | POST | `/learning-plans/save` |
 | Learning Plans | GET | `/learning-plans/active` |

@@ -9,6 +9,7 @@ from schema.learning_plan_schema import (
 from service.auth_service import get_current_user
 from service.gemini_service import generate_learning_plan
 from service.mongodb_service import (
+    get_learning_profile,
     save_learning_plan,
     get_active_learning_plan,
     get_next_learning_task,
@@ -36,11 +37,23 @@ def generate_plan(
             action="learning_plan_generate",
             limit=DAILY_LEARNING_PLAN_LIMIT
         )
+        profile = get_learning_profile(user_id=current_user["id"])
+        daily_minutes = (
+            request.daily_minutes or
+            profile.get("daily_minutes_default") or
+            60
+        )
+        language = (
+            request.language or
+            profile.get("preferred_language") or
+            "en"
+        )
         plan = generate_learning_plan(
             goal=request.goal,
             level=request.level,
-            daily_minutes=request.daily_minutes,
-            language=request.language
+            daily_minutes=daily_minutes,
+            language=language,
+            learning_profile=profile
         )
 
         return {

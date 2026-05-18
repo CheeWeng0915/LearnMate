@@ -4,7 +4,9 @@ import type {
   CompleteDayResponse,
   DayNote,
   GeneratePlanRequest,
+  LearningProfile,
   LearningPlan,
+  LearningReview,
   LoginRequest,
   RegisterRequest,
   ResourcesByDay,
@@ -99,6 +101,16 @@ export const planApi = {
     ),
 };
 
+// Profile
+export const profileApi = {
+  get: () => request<LearningProfile>("profile"),
+  update: (body: Omit<LearningProfile, "id" | "user_id" | "created_at" | "updated_at">) =>
+    request<LearningProfile>("profile", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
 // Tasks
 export const taskApi = {
   complete: (taskId: string) =>
@@ -133,6 +145,13 @@ export const agentApi = {
       method: "POST",
       body: JSON.stringify({ question: question?.trim() || null }),
     }),
+  review: (planId: string, day: number) =>
+    request<LearningReview>("agent/review", {
+      method: "POST",
+      body: JSON.stringify({ plan_id: planId, day }),
+    }),
+  latestReview: (planId: string, day: number) =>
+    request<LearningReview | null>(`agent/review/${planId}/${day}`),
 };
 
 export { ApiError };
