@@ -102,3 +102,21 @@ export type CompleteDayResponse = {
   progress_percent: number;
   is_plan_completed: boolean;
 };
+
+export type CoachAgentResponse = {
+  agent: {
+    name: string;
+    model: string;
+    google_adk_ready: boolean;
+    mongodb_mcp_enabled: boolean;
+    mongodb_mcp_entrypoint: string;
+    context_source: string;
+  };
+  coach: {
+    summary: string;
+    recommendation: string;
+    next_actions: string[];
+    motivation: string;
+    question_answer: string;
+  };
+};

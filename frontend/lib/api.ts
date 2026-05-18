@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  CoachAgentResponse,
   CompleteDayResponse,
   DayNote,
   GeneratePlanRequest,
@@ -122,6 +123,15 @@ export const youtubeApi = {
     request<YouTubeSearchResponse>("youtube/search", {
       method: "POST",
       body: JSON.stringify({ query, max_results }),
+    }),
+};
+
+// Agent
+export const agentApi = {
+  coach: (question?: string) =>
+    request<CoachAgentResponse>("agent/coach", {
+      method: "POST",
+      body: JSON.stringify({ question: question?.trim() || null }),
     }),
 };
 
